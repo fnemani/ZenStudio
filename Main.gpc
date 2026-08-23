@@ -1,5 +1,5 @@
 /* ========================================================================
-   Warzone GPC Script - V2.7 (SPEED & LOADOUT EDITION)
+   Warzone GPC Script - V2.7 (AGGRESSIVE MOVEMENT EDITION)
    Layout: Stick & Bewegung | Smart Weapon Tracking | Always-On AA
 ======================================================================== */
 const string BOOT_MSG1 = "V2.7 SPEED";
@@ -34,7 +34,6 @@ int AutoRun_Toggle = TRUE;
 int Slide_Toggle = TRUE;
 int RapidFire_Toggle = FALSE;
 int AutoPing_Toggle = TRUE;
-int DropShot_Toggle = TRUE;
 
 // --- WAFFEN PROFILE (MP & AR - Meta Optimized) ---
 int MP_Recoil = 15; // Primary: MP (Leichter Rückstoß für Nahkampf)
@@ -82,7 +81,7 @@ init {
 	cls_oled(0);
 	print(24, 5, 0, 1, BOOT_MSG1[0]);
 	print(36, 25, 0, 1, BOOT_MSG2[0]);
-	print(30, 45, 0, 1, MSG_WEAPON_MP[0]); // Startet standardmäßig mit MP-Anzeige
+	print(30, 45, 0, 1, MSG_WEAPON_MP[0]);
 }
 
 main {
@@ -99,7 +98,6 @@ main {
 	// =========================================================
 	// --- SMART WEAPON TRACKING (OLED UPDATE) ---
 	// =========================================================
-	// Normaler Waffenwechsel (Tap Dreieck)
 	if (event_press(SWAP_BTN) && !ads_on) {
 		is_secondary = !is_secondary;
 		cls_oled(0);
@@ -116,7 +114,6 @@ main {
 		}
 	}
 
-	// Manueller Resync (L2 halten + Dreieck) - Setzt stumm auf MP zurück
 	if (ads_on && event_press(SWAP_BTN)) {
 		is_secondary = FALSE;
 		Active_Recoil = MP_Recoil;
@@ -128,27 +125,25 @@ main {
 	}
 
 	// =========================================================
-	// --- MOVEMENT ---
+	// --- AGGRESSIVE MOVEMENT ---
 	// =========================================================
-	if (AutoRun_Toggle && ly_in < -60 && !ads_on && !fire_on && !get_val(RELOAD) && !combo_running(Fast_Slide_Cancel)) {
+	// Taktiksprint startet jetzt früher (-50) für noch schnellere Response
+	if (AutoRun_Toggle && ly_in < -50 && !ads_on && !fire_on && !get_val(RELOAD) && !combo_running(Fast_Slide_Cancel)) {
 		set_val(SPRINT, STICK_MAX);
 	}
 
+	// Slide into 3x Jump (B-Hop)
 	if (event_press(CROUCH)) {
-		if (ly_in < -60) {
-			if (Slide_Toggle) {
-				combo_run(Fast_Slide_Cancel);
-			}
-		}
-		else if (DropShot_Toggle && ads_on && fire_on) {
-			combo_run(Drop_Shot_Combo);
+		if (ly_in < -50 && Slide_Toggle) {
+			combo_run(Fast_Slide_Cancel);
 		}
 	}
 
-	if (get_val(JUMP)) {
+	// Manueller B-Hop, wenn man normal R3 hält
+	if (get_val(JUMP) && !combo_running(Fast_Slide_Cancel)) {
 		combo_run(B_Hop_Combo);
 	}
-	else {
+	else if (!combo_running(Fast_Slide_Cancel)) {
 		combo_stop(B_Hop_Combo);
 	}
 
@@ -196,7 +191,6 @@ main {
 		combo_stop(Rapid_Fire_Combo);
 	}
 
-	// Aim Assist ist nun immer aktiv, sobald du zielst
 	if (ads_on) {
 		if (rx_abs < AR_Release && ry_abs < AR_Release) {
 			combo_run(Rotational_AA);
@@ -240,13 +234,25 @@ main {
 }
 
 // =========================================================
-// --- COMBOS ---
+// --- COMBOS (AGGRESSIVE SETTINGS) ---
 // =========================================================
 combo Fast_Slide_Cancel {
+	// 1. Der harte Slide
 	set_val(CROUCH, STICK_MAX);
 	wait(60);
 	set_val(CROUCH, 0);
-	wait(20);
+	wait(30);
+	// 2. Sprung 1: Bricht den Slide ab (Slide Cancel)
+	set_val(JUMP, STICK_MAX);
+	wait(40);
+	set_val(JUMP, 0);
+	wait(60); // Kurze Pause, damit der Char den Boden berührt
+	// 3. Sprung 2: Erster Bunny-Hop
+	set_val(JUMP, STICK_MAX);
+	wait(40);
+	set_val(JUMP, 0);
+	wait(60);
+	// 4. Sprung 3: Zweiter Bunny-Hop
 	set_val(JUMP, STICK_MAX);
 	wait(40);
 	set_val(JUMP, 0);
@@ -257,11 +263,6 @@ combo B_Hop_Combo {
 	wait(40);
 	set_val(JUMP, 0);
 	wait(60);
-}
-
-combo Drop_Shot_Combo {
-	set_val(CROUCH, STICK_MAX);
-	wait(350);
 }
 
 combo Auto_Ping_Combo {
