@@ -1,0 +1,339 @@
+/* ========================================================================
+   Warzone GPC Script - V2.7 (SPEED & LOADOUT EDITION)
+   Layout: Stick & Bewegung | Smart Weapon Tracking | Always-On AA
+======================================================================== */
+const string BOOT_MSG1 = "V2.7 SPEED";
+const string BOOT_MSG2 = "BY FAWI";
+const string MSG_WEAPON_MP = "WAFFE: MP";
+const string MSG_WEAPON_AR = "WAFFE: AR";
+
+// --- Button Mappings – PS5 ("Stick & Bewegung") ---
+define ADS = XB1_LT; // L2
+define FIRE = XB1_RT; // R2
+define SPRINT = XB1_LS; // L3
+define RX = XB1_RX;
+define RY = XB1_RY;
+define LX = XB1_LX;
+define LY = XB1_LY;
+define CROUCH = XB1_B; // Kreis
+define JUMP = XB1_RS; // R3
+define MELEE = XB1_A; // Kreuz
+define RELOAD = XB1_X; // Viereck
+define SWAP_BTN = XB1_Y; // Dreieck
+define PING = XB1_UP;
+
+// --- Konstanten & Toggles ---
+define STICK_MAX = 100;
+define STICK_MIN = -100;
+define TRIGGER_DZ = 5;
+
+int AutoBreath_Toggle = TRUE;
+int Strafe_Toggle = TRUE;
+int AR_Toggle = TRUE;
+int AutoRun_Toggle = TRUE;
+int Slide_Toggle = TRUE;
+int RapidFire_Toggle = FALSE;
+int AutoPing_Toggle = TRUE;
+int DropShot_Toggle = TRUE;
+
+// --- WAFFEN PROFILE (MP & AR - Meta Optimized) ---
+int MP_Recoil = 15; // Primary: MP (Leichter Rückstoß für Nahkampf)
+int AR_Recoil = 25; // Secondary: Sturmgewehr (Stärkerer Rückstoß für Distanz)
+int Active_Recoil = 15; // Startet immer mit der MP
+int is_secondary = FALSE;
+
+// --- Aim Assist & Tracking Settings (Rebirth 4s) ---
+int Horizontal_Recoil = 0;
+int AR_Release = 45; // Schnelleres Tracking-Release
+int AA_Size = 15; // Engerer Kreis für unsichtbaren AA
+int AA_Speed = 20; // Geschmeidige Rotation
+int Strafe_AA_Size = 18;
+int Strafe_AA_Speed = 20;
+int RF_Hold = 30;
+int RF_Release = 30;
+int aa_step = 0;
+
+// --- Cache ---
+int ads_on;
+int fire_on;
+int ly_in;
+int lx_in;
+int rx_in;
+int ry_in;
+int rx_abs;
+int ry_abs;
+int was_ads_and_fire = FALSE;
+int jump_direction = 100;
+int ping_done = FALSE;
+
+function clamp_stick(val) {
+	if (val > STICK_MAX) {
+		return STICK_MAX;
+	}
+
+	if (val < STICK_MIN) {
+		return STICK_MIN;
+	}
+
+	return val;
+}
+
+init {
+	cls_oled(0);
+	print(24, 5, 0, 1, BOOT_MSG1[0]);
+	print(36, 25, 0, 1, BOOT_MSG2[0]);
+	print(30, 45, 0, 1, MSG_WEAPON_MP[0]); // Startet standardmäßig mit MP-Anzeige
+}
+
+main {
+	// 1. ZENTRALES CACHING
+	ads_on = (get_val(ADS) > TRIGGER_DZ);
+	fire_on = (get_val(FIRE) > TRIGGER_DZ);
+	ly_in = get_val(LY);
+	lx_in = get_val(LX);
+	rx_in = get_val(RX);
+	ry_in = get_val(RY);
+	rx_abs = abs(rx_in);
+	ry_abs = abs(ry_in);
+
+	// =========================================================
+	// --- SMART WEAPON TRACKING (OLED UPDATE) ---
+	// =========================================================
+	// Normaler Waffenwechsel (Tap Dreieck)
+	if (event_press(SWAP_BTN) && !ads_on) {
+		is_secondary = !is_secondary;
+		cls_oled(0);
+		print(24, 5, 0, 1, BOOT_MSG1[0]);
+		print(36, 25, 0, 1, BOOT_MSG2[0]);
+
+		if (is_secondary) {
+			Active_Recoil = AR_Recoil;
+			print(30, 45, 0, 1, MSG_WEAPON_AR[0]);
+		}
+		else {
+			Active_Recoil = MP_Recoil;
+			print(30, 45, 0, 1, MSG_WEAPON_MP[0]);
+		}
+	}
+
+	// Manueller Resync (L2 halten + Dreieck) - Setzt stumm auf MP zurück
+	if (ads_on && event_press(SWAP_BTN)) {
+		is_secondary = FALSE;
+		Active_Recoil = MP_Recoil;
+		set_val(SWAP_BTN, 0);
+		cls_oled(0);
+		print(24, 5, 0, 1, BOOT_MSG1[0]);
+		print(36, 25, 0, 1, BOOT_MSG2[0]);
+		print(30, 45, 0, 1, MSG_WEAPON_MP[0]);
+	}
+
+	// =========================================================
+	// --- MOVEMENT ---
+	// =========================================================
+	if (AutoRun_Toggle && ly_in < -60 && !ads_on && !fire_on && !get_val(RELOAD) && !combo_running(Fast_Slide_Cancel)) {
+		set_val(SPRINT, STICK_MAX);
+	}
+
+	if (event_press(CROUCH)) {
+		if (ly_in < -60) {
+			if (Slide_Toggle) {
+				combo_run(Fast_Slide_Cancel);
+			}
+		}
+		else if (DropShot_Toggle && ads_on && fire_on) {
+			combo_run(Drop_Shot_Combo);
+		}
+	}
+
+	if (get_val(JUMP)) {
+		combo_run(B_Hop_Combo);
+	}
+	else {
+		combo_stop(B_Hop_Combo);
+	}
+
+	if (ads_on && fire_on) {
+		was_ads_and_fire = TRUE;
+	}
+	else if (!ads_on && fire_on && was_ads_and_fire && lx_in > -40 && lx_in < 40) {
+		was_ads_and_fire = FALSE;
+		jump_direction = (jump_direction == 100) ? -100 : 100;
+		combo_run(Auto_Strafe_Jump);
+	}
+	else if (!fire_on) {
+		was_ads_and_fire = FALSE;
+	}
+
+	// =========================================================
+	// --- UTILITY ---
+	// =========================================================
+	if (AutoPing_Toggle && ads_on && fire_on) {
+		if (!ping_done) {
+			combo_run(Auto_Ping_Combo);
+			ping_done = TRUE;
+		}
+	}
+	else if (!fire_on) {
+		ping_done = FALSE;
+	}
+
+	// =========================================================
+	// --- ALWAYS-ON AIM ASSIST & DYNAMIC ANTI-RECOIL ---
+	// =========================================================
+	if (ads_on) {
+		set_val(ADS, STICK_MAX);
+	}
+
+	if (fire_on) {
+		if (RapidFire_Toggle) {
+			combo_run(Rapid_Fire_Combo);
+		}
+		else {
+			set_val(FIRE, STICK_MAX);
+		}
+	}
+	else {
+		combo_stop(Rapid_Fire_Combo);
+	}
+
+	// Aim Assist ist nun immer aktiv, sobald du zielst
+	if (ads_on) {
+		if (rx_abs < AR_Release && ry_abs < AR_Release) {
+			combo_run(Rotational_AA);
+		}
+		else {
+			combo_stop(Rotational_AA);
+		}
+	}
+	else {
+		combo_stop(Rotational_AA);
+	}
+
+	if (Strafe_Toggle && (ads_on || fire_on)) {
+		if (abs(ly_in) < 40 && abs(lx_in) < 40) {
+			combo_run(Strafe_AA);
+		}
+		else {
+			combo_stop(Strafe_AA);
+		}
+	}
+	else {
+		combo_stop(Strafe_AA);
+	}
+
+	if (AR_Toggle && ads_on && fire_on) {
+		if (rx_abs < AR_Release && ry_abs < AR_Release) {
+			if (ry_in < 15) {
+				set_val(RY, clamp_stick(ry_in + Active_Recoil));
+			}
+
+			set_val(RX, clamp_stick(rx_in + Horizontal_Recoil));
+		}
+	}
+
+	if (AutoBreath_Toggle && ads_on && !fire_on) {
+		combo_run(AutoBreath_Combo);
+	}
+	else {
+		combo_stop(AutoBreath_Combo);
+	}
+}
+
+// =========================================================
+// --- COMBOS ---
+// =========================================================
+combo Fast_Slide_Cancel {
+	set_val(CROUCH, STICK_MAX);
+	wait(60);
+	set_val(CROUCH, 0);
+	wait(20);
+	set_val(JUMP, STICK_MAX);
+	wait(40);
+	set_val(JUMP, 0);
+}
+
+combo B_Hop_Combo {
+	set_val(JUMP, STICK_MAX);
+	wait(40);
+	set_val(JUMP, 0);
+	wait(60);
+}
+
+combo Drop_Shot_Combo {
+	set_val(CROUCH, STICK_MAX);
+	wait(350);
+}
+
+combo Auto_Ping_Combo {
+	set_val(PING, STICK_MAX);
+	wait(50);
+	set_val(PING, 0);
+	wait(50);
+	set_val(PING, STICK_MAX);
+	wait(50);
+	set_val(PING, 0);
+	wait(500);
+}
+
+combo Auto_Strafe_Jump {
+	set_val(LX, jump_direction);
+	set_val(JUMP, STICK_MAX);
+	wait(120);
+	set_val(LX, jump_direction);
+	set_val(JUMP, 0);
+	wait(150);
+}
+
+combo Rapid_Fire_Combo {
+	set_val(FIRE, STICK_MAX);
+	wait(RF_Hold);
+	set_val(FIRE, 0);
+	wait(RF_Release);
+}
+
+combo Rotational_AA {
+	if (aa_step == 0) {
+		set_val(RY, clamp_stick(ry_in + AA_Size));
+	}
+	else if (aa_step == 1) {
+		set_val(RX, clamp_stick(rx_in + AA_Size));
+		set_val(RY, clamp_stick(ry_in + (AA_Size / 2)));
+	}
+	else if (aa_step == 2) {
+		set_val(RX, clamp_stick(rx_in + AA_Size));
+	}
+	else if (aa_step == 3) {
+		set_val(RX, clamp_stick(rx_in + AA_Size));
+		set_val(RY, clamp_stick(ry_in - (AA_Size / 2)));
+	}
+	else if (aa_step == 4) {
+		set_val(RY, clamp_stick(ry_in - AA_Size));
+	}
+	else if (aa_step == 5) {
+		set_val(RX, clamp_stick(rx_in - AA_Size));
+		set_val(RY, clamp_stick(ry_in - (AA_Size / 2)));
+	}
+	else if (aa_step == 6) {
+		set_val(RX, clamp_stick(rx_in - AA_Size));
+	}
+	else if (aa_step == 7) {
+		set_val(RX, clamp_stick(rx_in - AA_Size));
+		set_val(RY, clamp_stick(ry_in + (AA_Size / 2)));
+	}
+
+	aa_step = (aa_step + 1) & 7;
+	wait(AA_Speed);
+}
+
+combo Strafe_AA {
+	set_val(LX, clamp_stick(lx_in + Strafe_AA_Size));
+	wait(Strafe_AA_Speed);
+	set_val(LX, clamp_stick(lx_in - Strafe_AA_Size));
+	wait(Strafe_AA_Speed);
+}
+
+combo AutoBreath_Combo {
+	wait(150);
+	set_val(SPRINT, STICK_MAX);
+	wait(4000);
+}
