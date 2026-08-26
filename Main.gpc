@@ -1,8 +1,8 @@
 /* ========================================================================
-   Warzone GPC Script - V3.0 (FIXED & OPTIMIZED)
-   Layout: Stick & Bewegung | Clean Micro-Movements
+   Warzone GPC Script - V3.2 (RECOIL, AA & AUTO-PING FIXED)
+   Layout: Stick & Bewegung (R3 = Jump)
 ======================================================================== */
-const string BOOT_MSG1 = "V3.0 FIXED";
+const string BOOT_MSG1 = "V3.2 STABLE";
 const string BOOT_MSG2 = "BY FAWI";
 const string MSG_WEAPON_MP = "WAFFE: MP";
 const string MSG_WEAPON_AR = "WAFFE: AR";
@@ -16,7 +16,7 @@ define RY = XB1_RY;
 define LX = XB1_LX;
 define LY = XB1_LY;
 define CROUCH = XB1_B;
-define JUMP = XB1_RS;
+define JUMP = XB1_RS; // R3 für Stick & Bewegung
 define MELEE = XB1_A;
 define RELOAD = XB1_X;
 define SWAP_BTN = XB1_Y;
@@ -38,19 +38,19 @@ int AutoPing_Toggle = TRUE;
 // --- WAFFEN PROFILE ---
 int MP_Recoil = 19;
 int AR_Recoil = 26;
-int Active_Recoil = 20;
+int Active_Recoil = 19;
 int is_secondary = FALSE;
 
-// --- Aim Assist Settings (Optimiert) ---
-int AR_Release = 85;       // Erhöht, damit Anti-Recoil beim Tracking nicht sofort abbricht
-int AA_Size = 14;          // Feinerer Wert gegen Verziehen
-int AA_Speed = 15;
+// --- Aim Assist Settings ---
+int AR_Release = 80; // Schwellenwert für manuelles Übersteuern
+int AA_Size = 15; // Rotational Aim Assist Stärke
+int AA_Speed = 20; // Intervall-Geschwindigkeit in ms
 int Strafe_AA_Size = 16;
 int Strafe_AA_Speed = 20;
 int RF_Hold = 30;
 int RF_Release = 30;
 
-// --- State Cache & Calculation Variables ---
+// --- Internal Timers & States ---
 int ads_on;
 int fire_on;
 int ly_in;
@@ -63,11 +63,20 @@ int was_ads_and_fire = FALSE;
 int jump_direction = 100;
 int final_rx;
 int final_ry;
-int aa_index = 0;
+
+int aa_timer = 0;
+int aa_step = 0;
+int ping_ready = TRUE;
 
 function clamp_stick(val) {
-	if (val > STICK_MAX) return STICK_MAX;
-	if (val < STICK_MIN) return STICK_MIN;
+	if (val > STICK_MAX) {
+		return STICK_MAX;
+	}
+
+	if (val < STICK_MIN) {
+		return STICK_MIN;
+	}
+
 	return val;
 }
 
@@ -103,7 +112,8 @@ main {
 		if (is_secondary) {
 			Active_Recoil = AR_Recoil;
 			print(30, 45, 0, 1, MSG_WEAPON_AR[0]);
-		} else {
+		}
+		else {
 			Active_Recoil = MP_Recoil;
 			print(30, 45, 0, 1, MSG_WEAPON_MP[0]);
 		}
@@ -132,74 +142,97 @@ main {
 
 	if (get_val(JUMP) && !combo_running(Fast_Slide_Cancel)) {
 		combo_run(B_Hop_Combo);
-	} else if (!combo_running(Fast_Slide_Cancel)) {
+	}
+	else if (!combo_running(Fast_Slide_Cancel)) {
 		combo_stop(B_Hop_Combo);
 	}
 
 	if (ads_on && fire_on) {
 		was_ads_and_fire = TRUE;
-	} else if (!ads_on && fire_on && was_ads_and_fire) {
+	}
+	else if (!ads_on && fire_on && was_ads_and_fire) {
 		was_ads_and_fire = FALSE;
 		jump_direction = (jump_direction == 100) ? -100 : 100;
 		combo_run(Auto_Strafe_Jump);
-	} else if (!fire_on) {
+	}
+	else if (!fire_on) {
 		was_ads_and_fire = FALSE;
 	}
 
 	// =========================================================
-	// --- UTILITY (AUTO-PING) ---
+	// --- AUTO-PING (ZUVERLÄSSIGER DANGER PING) ---
 	// =========================================================
-	if (AutoPing_Toggle && ((ads_on && event_press(FIRE)) || (fire_on && event_press(ADS)))) {
-		combo_run(Auto_Ping_Combo);
+	if (AutoPing_Toggle) {
+		if (ads_on && fire_on) {
+			if (ping_ready) {
+				combo_run(Auto_Ping_Combo);
+				ping_ready = FALSE;
+			}
+		}
+		else if (!fire_on) {
+			ping_ready = TRUE;
+		}
 	}
 
 	// =========================================================
 	// --- TRIGGER & RAPID FIRE ---
 	// =========================================================
-	if (ads_on) set_val(ADS, STICK_MAX);
+	if (ads_on) {
+		set_val(ADS, STICK_MAX);
+	}
+
 	if (fire_on) {
-		if (RapidFire_Toggle) combo_run(Rapid_Fire_Combo);
-		else set_val(FIRE, STICK_MAX);
-	} else {
+		if (RapidFire_Toggle) {
+			combo_run(Rapid_Fire_Combo);
+		}
+		else {
+			set_val(FIRE, STICK_MAX);
+		}
+	}
+	else {
 		combo_stop(Rapid_Fire_Combo);
 	}
 
 	// =========================================================
-	// --- AIM ASSIST & DYNAMIC ANTI-RECOIL (FIXED LOOP) ---
+	// --- AIM ASSIST & ANTI-RECOIL (SYNCHRONER LOOP) ---
 	// =========================================================
 	final_rx = rx_in;
 	final_ry = ry_in;
 
 	if (ads_on) {
-		// Rotational Micro-Movements direkt berechnen
+		// 1. Rotational Aim Assist (kontinuierlicher Mikrozirkel)
 		if (rx_abs < AR_Release && ry_abs < AR_Release) {
-			if (combo_running(Rotational_AA)) {
-				// Nutzt den Timer-Schritt der Combo für flüssigen Micro-Aim
-				if (aa_index == 0)      { final_rx += 0;       final_ry += AA_Size; }
-				else if (aa_index == 1) { final_rx += AA_Size; final_ry += (AA_Size/2); }
-				else if (aa_index == 2) { final_rx += AA_Size; final_ry += 0; }
-				else if (aa_index == 3) { final_rx += AA_Size; final_ry -= (AA_Size/2); }
-				else if (aa_index == 4) { final_rx += 0;       final_ry -= AA_Size; }
-				else if (aa_index == 5) { final_rx -= AA_Size; final_ry -= (AA_Size/2); }
-				else if (aa_index == 6) { final_rx -= AA_Size; final_ry += 0; }
-				else if (aa_index == 7) { final_rx -= AA_Size; final_ry += (AA_Size/2); }
-			} else {
-				combo_run(Rotational_AA);
+			aa_timer = aa_timer + get_rtime();
+
+			if (aa_timer >= AA_Speed) {
+				aa_timer = 0;
+				aa_step = (aa_step + 1) & 3; // 4-Punkt-Kreis: 0, 1, 2, 3
+			}
+
+			if (aa_step == 0) {
+				final_ry = final_ry + AA_Size;
+			}
+			else if (aa_step == 1) {
+				final_rx = final_rx + AA_Size;
+			}
+			else if (aa_step == 2) {
+				final_ry = final_ry - AA_Size;
+			}
+			else if (aa_step == 3) {
+				final_rx = final_rx - AA_Size;
 			}
 		}
 
-		// Anti-Recoil greift beim Schießen
+		// 2. Lineares Anti-Recoil beim Schießen
 		if (AR_Toggle && fire_on) {
 			if (rx_abs < AR_Release && ry_abs < AR_Release) {
-				final_ry += Active_Recoil; // Zieht den Stick nach unten ausgleichnd
+				final_ry = final_ry + Active_Recoil;
 			}
 		}
 
-		// Stick-Werte sicher an die Konsole senden
+		// Werte gebündelt auf die Sticks anwenden
 		set_val(RX, clamp_stick(final_rx));
 		set_val(RY, clamp_stick(final_ry));
-	} else {
-		combo_stop(Rotational_AA);
 	}
 
 	// =========================================================
@@ -207,13 +240,15 @@ main {
 	// =========================================================
 	if (Strafe_Toggle && (ads_on || fire_on) && abs(ly_in) < 40 && abs(lx_in) < 40) {
 		combo_run(Strafe_AA);
-	} else {
+	}
+	else {
 		combo_stop(Strafe_AA);
 	}
 
 	if (AutoBreath_Toggle && ads_on && !fire_on) {
 		combo_run(AutoBreath_Combo);
-	} else {
+	}
+	else {
 		combo_stop(AutoBreath_Combo);
 	}
 }
@@ -226,6 +261,10 @@ combo Fast_Slide_Cancel {
 	wait(80);
 	set_val(CROUCH, 0);
 	wait(40);
+	set_val(JUMP, STICK_MAX);
+	wait(40);
+	set_val(JUMP, 0);
+	wait(50);
 	set_val(JUMP, STICK_MAX);
 	wait(40);
 	set_val(JUMP, 0);
@@ -242,11 +281,10 @@ combo Auto_Ping_Combo {
 	set_val(PING, STICK_MAX);
 	wait(60);
 	set_val(PING, 0);
-	wait(50);
+	wait(80);
 	set_val(PING, STICK_MAX);
 	wait(60);
 	set_val(PING, 0);
-	wait(1300);
 }
 
 combo Auto_Strafe_Jump {
@@ -263,12 +301,6 @@ combo Rapid_Fire_Combo {
 	wait(RF_Hold);
 	set_val(FIRE, 0);
 	wait(RF_Release);
-}
-
-// Steuert den Takt für die Aim-Assist-Mikrobewegungen
-combo Rotational_AA {
-	wait(AA_Speed);
-	aa_index = (aa_index + 1) & 7;
 }
 
 combo Strafe_AA {
