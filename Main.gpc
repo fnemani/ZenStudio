@@ -1,11 +1,13 @@
 /* ========================================================================
-   Warzone GPC Script - V3.2 (RECOIL, AA & AUTO-PING FIXED)
+   Warzone GPC Script - V4.3 (PERFORMANCE & QOL OPTIMIZED)
    Layout: Stick & Bewegung (R3 = Jump)
 ======================================================================== */
-const string BOOT_MSG1 = "V3.2 STABLE";
+const string BOOT_MSG1 = "V4.3 OPTIMIZED";
 const string BOOT_MSG2 = "BY FAWI";
 const string MSG_WEAPON_MP = "WAFFE: MP";
 const string MSG_WEAPON_AR = "WAFFE: AR";
+const string MSG_RF_ON = "RAPID: ON";
+const string MSG_RF_OFF = "RAPID: OFF";
 
 // --- Button Mappings – PS5 ---
 define ADS = XB1_LT;
@@ -21,6 +23,7 @@ define MELEE = XB1_A;
 define RELOAD = XB1_X;
 define SWAP_BTN = XB1_Y;
 define PING = XB1_UP;
+define DPAD_LEFT = XB1_LEFT; // Für manuellen Rapid-Fire Toggle
 
 // --- Konstanten & Toggles ---
 define STICK_MAX = 100;
@@ -29,26 +32,33 @@ define TRIGGER_DZ = 5;
 
 int AutoBreath_Toggle = TRUE;
 int Strafe_Toggle = TRUE;
-int AR_Toggle = TRUE;
 int AutoRun_Toggle = TRUE;
 int Slide_Toggle = TRUE;
-int RapidFire_Toggle = FALSE;
+int RapidFire_Toggle = TRUE;
 int AutoPing_Toggle = TRUE;
 
-// --- WAFFEN PROFILE ---
-int MP_Recoil = 19;
-int AR_Recoil = 26;
-int Active_Recoil = 19;
+// --- WAFFEN PROFILE (Rapid Fire) ---
 int is_secondary = FALSE;
 
-// --- Aim Assist Settings ---
-int AR_Release = 80; // Schwellenwert für manuelles Übersteuern
-int AA_Size = 15; // Rotational Aim Assist Stärke
-int AA_Speed = 20; // Intervall-Geschwindigkeit in ms
-int Strafe_AA_Size = 16;
-int Strafe_AA_Speed = 20;
-int RF_Hold = 30;
-int RF_Release = 30;
+// Settings für die MP (Primärwaffe)
+int MP_RF_Hold = 30;
+int MP_RF_Release = 30;
+
+// Settings für das Sturmgewehr / AR (Sekundärwaffe)
+int AR_RF_Hold = 40;
+int AR_RF_Release = 40;
+
+// Aktuell genutzte Settings
+int Active_RF_Hold = 30;
+int Active_RF_Release = 30;
+
+// --- Aim Assist Settings (MAXIMUM AGGRESSIVE) ---
+int AA_Release = 85;
+int AA_Size = 22;
+int AA_Diag = 15; // CPU OPTIMIERUNG: Vorberechneter Wert (22 * 7 / 10)
+int AA_Speed = 10;
+int Strafe_AA_Size = 20;
+int Strafe_AA_Speed = 10;
 
 // --- Internal Timers & States ---
 int ads_on;
@@ -82,7 +92,7 @@ function clamp_stick(val) {
 
 init {
 	cls_oled(0);
-	print(24, 5, 0, 1, BOOT_MSG1[0]);
+	print(15, 5, 0, 1, BOOT_MSG1[0]);
 	print(36, 25, 0, 1, BOOT_MSG2[0]);
 	print(30, 45, 0, 1, MSG_WEAPON_MP[0]);
 }
@@ -101,32 +111,48 @@ main {
 	ry_abs = abs(ry_in);
 
 	// =========================================================
-	// --- SMART WEAPON TRACKING (OLED) ---
+	// --- IN-GAME TOGGLES & SMART WEAPON TRACKING ---
 	// =========================================================
-	if (event_press(SWAP_BTN) && !ads_on) {
-		is_secondary = !is_secondary;
+	// 1. Manueller Rapid-Fire Toggle (L2 + D-Pad Links)
+	if (ads_on && event_press(DPAD_LEFT)) {
+		RapidFire_Toggle = !RapidFire_Toggle;
 		cls_oled(0);
-		print(24, 5, 0, 1, BOOT_MSG1[0]);
-		print(36, 25, 0, 1, BOOT_MSG2[0]);
 
-		if (is_secondary) {
-			Active_Recoil = AR_Recoil;
-			print(30, 45, 0, 1, MSG_WEAPON_AR[0]);
+		if (RapidFire_Toggle) {
+			print(25, 25, 0, 1, MSG_RF_ON[0]);
 		}
 		else {
-			Active_Recoil = MP_Recoil;
-			print(30, 45, 0, 1, MSG_WEAPON_MP[0]);
+			print(20, 25, 0, 1, MSG_RF_OFF[0]);
 		}
 	}
 
+	// 2. Automatischer Profilwechsel (Dreieck / Y tippen)
+	if (event_press(SWAP_BTN) && !ads_on) {
+		is_secondary = !is_secondary;
+		cls_oled(0);
+		print(15, 5, 0, 1, BOOT_MSG1[0]);
+
+		if (is_secondary) {
+			Active_RF_Hold = AR_RF_Hold;
+			Active_RF_Release = AR_RF_Release;
+			print(30, 25, 0, 1, MSG_WEAPON_AR[0]);
+		}
+		else {
+			Active_RF_Hold = MP_RF_Hold;
+			Active_RF_Release = MP_RF_Release;
+			print(30, 25, 0, 1, MSG_WEAPON_MP[0]);
+		}
+	}
+
+	// 3. Manueller Reset auf MP (L2 + Dreieck / Y)
 	if (ads_on && event_press(SWAP_BTN)) {
 		is_secondary = FALSE;
-		Active_Recoil = MP_Recoil;
-		set_val(SWAP_BTN, 0);
+		Active_RF_Hold = MP_RF_Hold;
+		Active_RF_Release = MP_RF_Release;
+		set_val(SWAP_BTN, 0); // Verhindert echten Waffenwechsel im Spiel
 		cls_oled(0);
-		print(24, 5, 0, 1, BOOT_MSG1[0]);
-		print(36, 25, 0, 1, BOOT_MSG2[0]);
-		print(30, 45, 0, 1, MSG_WEAPON_MP[0]);
+		print(15, 5, 0, 1, BOOT_MSG1[0]);
+		print(30, 25, 0, 1, MSG_WEAPON_MP[0]);
 	}
 
 	// =========================================================
@@ -175,7 +201,7 @@ main {
 	}
 
 	// =========================================================
-	// --- TRIGGER & RAPID FIRE ---
+	// --- TRIGGER & DYNAMIC RAPID FIRE ---
 	// =========================================================
 	if (ads_on) {
 		set_val(ADS, STICK_MAX);
@@ -194,43 +220,51 @@ main {
 	}
 
 	// =========================================================
-	// --- AIM ASSIST & ANTI-RECOIL (SYNCHRONER LOOP) ---
+	// --- PURE AIM ASSIST (CPU-OPTIMIZED 8-POINT CIRCLE) ---
 	// =========================================================
 	final_rx = rx_in;
 	final_ry = ry_in;
 
 	if (ads_on) {
-		// 1. Rotational Aim Assist (kontinuierlicher Mikrozirkel)
-		if (rx_abs < AR_Release && ry_abs < AR_Release) {
+		if (rx_abs < AA_Release && ry_abs < AA_Release) {
 			aa_timer = aa_timer + get_rtime();
 
 			if (aa_timer >= AA_Speed) {
 				aa_timer = 0;
-				aa_step = (aa_step + 1) & 3; // 4-Punkt-Kreis: 0, 1, 2, 3
+				aa_step = (aa_step + 1) & 7; // 8-Punkt Zirkel (0 bis 7)
 			}
 
+			// Kreis-Approximation mit vorberechneten Diagonale-Werten (AA_Diag)
 			if (aa_step == 0) {
 				final_ry = final_ry + AA_Size;
 			}
 			else if (aa_step == 1) {
-				final_rx = final_rx + AA_Size;
+				final_rx = final_rx + AA_Diag;
+				final_ry = final_ry + AA_Diag;
 			}
 			else if (aa_step == 2) {
-				final_ry = final_ry - AA_Size;
+				final_rx = final_rx + AA_Size;
 			}
 			else if (aa_step == 3) {
+				final_rx = final_rx + AA_Diag;
+				final_ry = final_ry - AA_Diag;
+			}
+			else if (aa_step == 4) {
+				final_ry = final_ry - AA_Size;
+			}
+			else if (aa_step == 5) {
+				final_rx = final_rx - AA_Diag;
+				final_ry = final_ry - AA_Diag;
+			}
+			else if (aa_step == 6) {
 				final_rx = final_rx - AA_Size;
 			}
-		}
-
-		// 2. Lineares Anti-Recoil beim Schießen
-		if (AR_Toggle && fire_on) {
-			if (rx_abs < AR_Release && ry_abs < AR_Release) {
-				final_ry = final_ry + Active_Recoil;
+			else if (aa_step == 7) {
+				final_rx = final_rx - AA_Diag;
+				final_ry = final_ry + AA_Diag;
 			}
 		}
 
-		// Werte gebündelt auf die Sticks anwenden
 		set_val(RX, clamp_stick(final_rx));
 		set_val(RY, clamp_stick(final_ry));
 	}
@@ -298,9 +332,9 @@ combo Auto_Strafe_Jump {
 
 combo Rapid_Fire_Combo {
 	set_val(FIRE, STICK_MAX);
-	wait(RF_Hold);
+	wait(Active_RF_Hold);
 	set_val(FIRE, 0);
-	wait(RF_Release);
+	wait(Active_RF_Release);
 }
 
 combo Strafe_AA {
