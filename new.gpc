@@ -1,25 +1,23 @@
 // ============================================================================
-// 🎮 WARZONE GPC PRO | PS5 DUALSENSE EDITION (VERSION 2.1 - ERROR FIXED)
+// 🎮 WARZONE GPC PRO | PS5 DUALSENSE EDITION (VERSION 3.1 - FINAL BUILD)
 // 🕹️ Layout: Stick & Bewegung (Stick & Move)
-// ⚙️ Features: Smart AA, Clamped Recoil, EEPROM Memory, LED Feedback
+// ⚙️ Features: Zero-Lag Swap, Smart AA, Clamped Recoil, Aggressive Movement
 // ============================================================================
-// --- Globale Variablen (Alle im Top-Level deklariert) ---
-int current_weapon;
+// --- Globale Variablen ---
+int current_weapon = 0; // Startet immer mit Profil 0 (MP)
 int recoil_MP = 20;
 int recoil_AR = 25;
 int aim_assist = 1;
 int active_recoil;
-int final_recoil; // FIX 1: Hier nach ganz oben verschoben!
+int final_recoil;
 
 define DEADZONE = 10;
 
 // ============================================================================
-// 🎬 INITIALISIERUNG (SPEICHER)
+// 🎬 INITIALISIERUNG
 // ============================================================================
 init {
-	// Lade zuletzt verwendete Waffe aus dem persistenten EEPROM-Speicher des Zen
-	// FIX 2: Das unzulässige wait() wurde hier entfernt.
-	current_weapon = get_pvar(SPVAR_1, 0, 1, 0);
+	// Setzt die LED-Farbe direkt beim Start auf Profil 1 (Blau)
 	update_feedback();
 }
 
@@ -28,7 +26,7 @@ init {
 // ============================================================================
 main {
 	// ------------------------------------------------------------------------
-	// 1. Hair Triggers
+	// 1. Hair Triggers & Easy Sprint
 	// ------------------------------------------------------------------------
 	if (get_val(PS4_L2) > DEADZONE) {
 		set_val(PS4_L2, 100);
@@ -38,21 +36,26 @@ main {
 		set_val(PS4_R2, 100);
 	}
 
-	// ------------------------------------------------------------------------
-	// 2. Auto-Breath
-	// ------------------------------------------------------------------------
+	// Aggressiver Auto-Tac-Sprint: Löst L3 ab 40% Stick-Ausschlag nach vorne aus
+	if (get_val(PS4_LY) < -40) {
+		set_val(PS4_L3, 100);
+	}
+
+	// Auto-Breath (für Sniper-Loadouts)
 	if (get_val(PS4_L2)) {
 		set_val(PS4_L3, 100);
 	}
 
 	// ------------------------------------------------------------------------
-	// 3. Smart Weapon Tracking & Resync
+	// 2. Zero-Lag Weapon Tracking (Manuell & Resync)
 	// ------------------------------------------------------------------------
+	// Resync (L2 halten + Dreieck) - Setzt lautlos auf MP (Blau) zurück
 	if (get_val(PS4_L2) && event_press(PS4_TRIANGLE)) {
 		current_weapon = 0;
-		set_val(PS4_TRIANGLE, 0);
-		save_and_update();
+		set_val(PS4_TRIANGLE, 0); // Blockiert In-Game Wechsel für sauberen Resync
+		update_feedback();
 	}
+	// Normaler Waffenwechsel (nur Dreieck) - In-Game sofort ohne Delay
 	else if (event_press(PS4_TRIANGLE)) {
 		if (current_weapon == 0) {
 			current_weapon = 1;
@@ -61,11 +64,11 @@ main {
 			current_weapon = 0;
 		}
 
-		save_and_update();
+		update_feedback();
 	}
 
 	// ------------------------------------------------------------------------
-	// 4. Dynamic Clamped Anti-Recoil
+	// 3. Dynamic Clamped Anti-Recoil
 	// ------------------------------------------------------------------------
 	if (get_val(PS4_L2) && get_val(PS4_R2)) {
 		if (current_weapon == 0) {
@@ -75,10 +78,11 @@ main {
 			active_recoil = recoil_AR;
 		}
 
+		// Anti-Resistance für flüssiges manuelles Zielen nach unten
 		if (abs(get_val(PS4_RY)) < active_recoil + 15) {
-			// FIX 1: Variable wird hier nur genutzt, nicht neu deklariert
 			final_recoil = get_val(PS4_RY) + active_recoil;
 
+			// Clamping verhindert Engine-Bugs bei extremen Werten
 			if (final_recoil > 100) {
 				final_recoil = 100;
 			}
@@ -92,55 +96,59 @@ main {
 	}
 
 	// ------------------------------------------------------------------------
-	// 5. Auto-Ping
+	// 4. Auto-Ping (Markiert Gegner beim ersten Schuss)
 	// ------------------------------------------------------------------------
 	if (get_val(PS4_L2) && event_press(PS4_R2)) {
 		combo_run(AutoPing);
 	}
 
 	// ------------------------------------------------------------------------
-	// 6. Smart Aim Assist
+	// 5. Smart Aim Assist & Hip-Fire Boost
 	// ------------------------------------------------------------------------
-	if (aim_assist == 1 && get_val(PS4_L2)) {
-		if (abs(get_val(PS4_RX)) < 30 && abs(get_val(PS4_RY)) < 30) {
+	if (aim_assist == 1) {
+		// Normaler ADS Aim Assist (Pausiert kurz bei starken Flicks über 30%)
+		if (get_val(PS4_L2) && abs(get_val(PS4_RX)) < 30 && abs(get_val(PS4_RY)) < 30) {
 			combo_run(RotationalAA);
+		}
+
+		// Hip-Fire Strafe Assist (Nur R2 gedrückt) für CQC
+		if (get_val(PS4_R2) && !get_val(PS4_L2)) {
+			combo_run(HipfireStrafe);
 		}
 	}
 
 	// ------------------------------------------------------------------------
-	// 7. Aggressive Slide-Cancel
+	// 6. Aggressive Movement Systems
 	// ------------------------------------------------------------------------
+	// Slide Cancel in 3x B-Hop (Timings für Rebirth)
 	if (event_press(PS4_CIRCLE) && get_val(PS4_LY) < -70) {
 		combo_run(SlideCancelBHop);
 	}
 
-	// ------------------------------------------------------------------------
-	// 8. Auto Strafe Jump
-	// ------------------------------------------------------------------------
+	// Insta-Drop-Shot (Gunfight R2 + Kreis)
+	if (get_val(PS4_R2) && event_press(PS4_CIRCLE)) {
+		combo_run(DropShot);
+	}
+
+	// Camera-Breaker (Aim loslassen während Gunfight)
 	if (get_val(PS4_R2) && event_release(PS4_L2)) {
 		combo_run(StrafeJump);
 	}
 }
 
 // ============================================================================
-// 🧠 FUNKTIONEN (SPEICHER & FEEDBACK)
+// 🧠 FUNKTIONEN (LED FEEDBACK)
 // ============================================================================
-function save_and_update() {
-	set_pvar(SPVAR_1, current_weapon);
-	update_feedback();
-}
-
-// FIX 3: OLED Text-Strings entfernt, um GPC5106/GPC6011 Fehler zu beheben.
 function update_feedback() {
 	if (current_weapon == 0) {
-		// Profil 1: MP (Primary) -> Blaue LED am Controller
+		// Profil 1 (Primary/MP) -> Blaue LED
 		set_led(LED_1, 1);
 		set_led(LED_2, 0);
 		set_led(LED_3, 0);
 		set_led(LED_4, 0);
 	}
 	else {
-		// Profil 2: AR (Secondary) -> Rote LED am Controller
+		// Profil 2 (Secondary/AR) -> Rote LED
 		set_led(LED_1, 0);
 		set_led(LED_2, 1);
 		set_led(LED_3, 0);
@@ -160,32 +168,46 @@ combo AutoPing {
 
 combo SlideCancelBHop {
 	set_val(PS4_CIRCLE, 100);
-	wait(110);
+	wait(80);
+	set_val(PS4_CIRCLE, 0);
+	wait(30);
+	set_val(PS4_CIRCLE, 100);
+	wait(50);
 	set_val(PS4_CIRCLE, 0);
 	wait(40);
-	set_val(PS4_CIRCLE, 100);
+	// B-Hops über R3 getriggert (Stick & Move Layout)
+	set_val(PS4_R3, 100);
 	wait(60);
-	set_val(PS4_CIRCLE, 0);
-	wait(50);
-	set_val(PS4_R3, 100);
-	wait(70);
 	set_val(PS4_R3, 0);
-	wait(70);
+	wait(60);
 	set_val(PS4_R3, 100);
-	wait(70);
+	wait(60);
 	set_val(PS4_R3, 0);
-	wait(70);
+	wait(60);
 	set_val(PS4_R3, 100);
-	wait(70);
+	wait(60);
 	set_val(PS4_R3, 0);
 }
 
 combo StrafeJump {
 	set_val(PS4_LX, 100);
 	set_val(PS4_R3, 100);
-	wait(90);
+	wait(80);
 	set_val(PS4_R3, 0);
-	wait(50);
+	wait(40);
+}
+
+combo DropShot {
+	set_val(PS4_CIRCLE, 100);
+	wait(350);
+	set_val(PS4_CIRCLE, 0);
+}
+
+combo HipfireStrafe {
+	set_val(PS4_LX, get_val(PS4_LX) + 20);
+	wait(30);
+	set_val(PS4_LX, get_val(PS4_LX) - 20);
+	wait(30);
 }
 
 combo RotationalAA {
