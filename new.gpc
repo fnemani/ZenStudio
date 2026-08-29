@@ -1,5 +1,5 @@
 // ============================================================================
-// 🎮 WARZONE GPC PRO | PS5 DUALSENSE EDITION (VERSION 4.0 - SPEED BUILD)
+// 🎮 WARZONE GPC PRO | PS5 DUALSENSE EDITION (VERSION 4.2 - BUGFIX BUILD)
 // 🕹️ Layout: Stick & Bewegung (Stick & Move) -> R3 = Jump, Kreis = Crouch
 // ============================================================================
 int current_weapon = 0;
@@ -30,12 +30,10 @@ main {
 	// ------------------------------------------------------------------------
 	// 2. Aggressiver Auto-Tac-Sprint & Sniper-Breath
 	// ------------------------------------------------------------------------
-	// Blockiert den Sprint beim Zielen/Schießen, um Abbrüche zu vermeiden
 	if (get_val(PS4_LY) < -60 && !get_val(PS4_L2) && !get_val(PS4_R2)) {
 		set_val(PS4_L3, 100);
 	}
 
-	// Auto-Breath beim Visieren
 	if (get_val(PS4_L2)) {
 		set_val(PS4_L3, 100);
 	}
@@ -45,12 +43,10 @@ main {
 	// ------------------------------------------------------------------------
 	if (event_press(PS4_TRIANGLE)) {
 		if (get_val(PS4_L2)) {
-			// Resync auf MP (Primär)
 			current_weapon = 0;
 			set_val(PS4_TRIANGLE, 0);
 		}
 		else {
-			// Normaler Wechsel
 			current_weapon = !current_weapon;
 		}
 
@@ -58,7 +54,7 @@ main {
 	}
 
 	// ------------------------------------------------------------------------
-	// 4. Dynamic Clamped Anti-Recoil (CPU-freundlicher berechnet)
+	// 4. Dynamic Clamped Anti-Recoil
 	// ------------------------------------------------------------------------
 	if (get_val(PS4_L2) && get_val(PS4_R2)) {
 		active_recoil = (current_weapon == 0) ? recoil_MP : recoil_AR;
@@ -66,7 +62,6 @@ main {
 		if (abs(get_val(PS4_RY)) < active_recoil + 15) {
 			final_recoil = get_val(PS4_RY) + active_recoil;
 
-			// Clamping in einer Zeile (verhindert Engine-Bugs)
 			if (final_recoil > 100) {
 				final_recoil = 100;
 			}
@@ -79,7 +74,7 @@ main {
 	}
 
 	// ------------------------------------------------------------------------
-	// 5. Auto-Ping (Optimiert, damit der erste Schuss nicht ruckelt)
+	// 5. Auto-Ping
 	// ------------------------------------------------------------------------
 	if (get_val(PS4_L2) && event_press(PS4_R2)) {
 		combo_run(AutoPing);
@@ -99,21 +94,29 @@ main {
 	}
 
 	// ------------------------------------------------------------------------
-	// 7. Aggressive Movement Systems (Modern WZ Mechanics)
+	// 7. Aggressive Movement Systems
 	// ------------------------------------------------------------------------
-	// Slide Cancel (Slide -> Jump) + B-Hop
 	if (event_press(PS4_CIRCLE) && get_val(PS4_LY) < -60) {
 		combo_run(ModernSlideCancel);
 	}
 
-	// Insta-Drop-Shot
 	if (get_val(PS4_R2) && event_press(PS4_CIRCLE)) {
 		combo_run(DropShot);
 	}
 
-	// Camera-Breaker (Aim Release Strafe)
 	if (get_val(PS4_R2) && event_release(PS4_L2)) {
 		combo_run(StrafeJump);
+	}
+
+	// ------------------------------------------------------------------------
+	// 8. Auto-Strafe (L2 + R2)
+	// ------------------------------------------------------------------------
+	if (get_val(PS4_L2) && get_val(PS4_R2)) {
+		combo_run(AutoStrafe);
+	}
+	else if (combo_running(AutoStrafe)) {
+		// GPC-konforme Abfrage: Stoppt die Combo sofort sauber
+		combo_stop(AutoStrafe);
 	}
 }
 
@@ -121,8 +124,8 @@ main {
 // 🧠 FUNKTIONEN
 // ============================================================================
 function update_feedback() {
-	set_led(LED_1, current_weapon == 0); // Blau wenn 0
-	set_led(LED_2, current_weapon == 1); // Rot wenn 1
+	set_led(LED_1, current_weapon == 0);
+	set_led(LED_2, current_weapon == 1);
 	set_led(LED_3, 0);
 	set_led(LED_4, 0);
 }
@@ -132,23 +135,20 @@ function update_feedback() {
 // ============================================================================
 combo AutoPing {
 	set_val(PS4_UP, 100);
-	wait(20); // Verkürzt, um Input-Lag beim Feuern zu verhindern
+	wait(20);
 	set_val(PS4_UP, 0);
 	wait(20);
 }
 
 combo ModernSlideCancel {
-	// 1. Slide
 	set_val(PS4_CIRCLE, 100);
 	wait(120);
 	set_val(PS4_CIRCLE, 0);
 	wait(30);
-	// 2. Cancel mit Jump (R3 bei Stick & Move)
 	set_val(PS4_R3, 100);
 	wait(80);
 	set_val(PS4_R3, 0);
 	wait(40);
-	// 3. Optionaler B-Hop
 	set_val(PS4_R3, 100);
 	wait(80);
 	set_val(PS4_R3, 0);
@@ -174,7 +174,6 @@ combo HipfireStrafe {
 }
 
 combo RotationalAA {
-	// Engere und flüssigere Rotation für stärkeren Sticky-Aim
 	set_val(PS4_RX, get_val(PS4_RX) + 18);
 	wait(15);
 	set_val(PS4_RY, get_val(PS4_RY) + 18);
@@ -183,4 +182,11 @@ combo RotationalAA {
 	wait(15);
 	set_val(PS4_RY, get_val(PS4_RY) - 18);
 	wait(15);
+}
+
+combo AutoStrafe {
+	set_val(PS4_LX, -100);
+	wait(300);
+	set_val(PS4_LX, 100);
+	wait(300);
 }
