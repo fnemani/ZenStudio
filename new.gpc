@@ -1,5 +1,5 @@
 // ============================================================================
-// 🎮 WARZONE GPC PRO | PS5 DUALSENSE EDITION (VERSION 4.2 - BUGFIX BUILD)
+// 🎮 WARZONE GPC PRO | PS5 DUALSENSE EDITION (VERSION 5.1 - COMPILER FIX)
 // 🕹️ Layout: Stick & Bewegung (Stick & Move) -> R3 = Jump, Kreis = Crouch
 // ============================================================================
 int current_weapon = 0;
@@ -11,13 +11,21 @@ int final_recoil;
 
 define DEADZONE = 10;
 
+// ----------------------------------------------------------------------------
+// OLED Strings (Verhindert "String literals not supported" Fehler)
+// ----------------------------------------------------------------------------
+const string msg_mp1 = " PROFIL: MP ";
+const string msg_mp2 = " (SMG Mode) ";
+const string msg_ar1 = " PROFIL: AR ";
+const string msg_ar2 = " (Long Range)";
+
 init {
 	update_feedback();
 }
 
 main {
 	// ------------------------------------------------------------------------
-	// 1. Hair Triggers (Maximaler Output bei minimalem Drücken)
+	// 1. Hair Triggers (Maximaler Output)
 	// ------------------------------------------------------------------------
 	if (get_val(PS4_L2) > DEADZONE) {
 		set_val(PS4_L2, 100);
@@ -39,7 +47,7 @@ main {
 	}
 
 	// ------------------------------------------------------------------------
-	// 3. Zero-Lag Weapon Tracking (Optimierte Logik)
+	// 3. Zero-Lag Weapon Tracking & OLED Update
 	// ------------------------------------------------------------------------
 	if (event_press(PS4_TRIANGLE)) {
 		if (get_val(PS4_L2)) {
@@ -74,21 +82,24 @@ main {
 	}
 
 	// ------------------------------------------------------------------------
-	// 5. Auto-Ping
+	// 5. Auto-Ping (First Shot)
 	// ------------------------------------------------------------------------
 	if (get_val(PS4_L2) && event_press(PS4_R2)) {
 		combo_run(AutoPing);
 	}
 
 	// ------------------------------------------------------------------------
-	// 6. Smart Aim Assist & Hip-Fire Boost
+	// 6. Circular Aim Assist (Smooth Tracking)
 	// ------------------------------------------------------------------------
 	if (aim_assist) {
-		if (get_val(PS4_L2) && abs(get_val(PS4_RX)) < 30 && abs(get_val(PS4_RY)) < 30) {
-			combo_run(RotationalAA);
+		if (get_val(PS4_L2) && abs(get_val(PS4_RX)) < 40 && abs(get_val(PS4_RY)) < 40) {
+			combo_run(CircularAA);
+		}
+		else if (combo_running(CircularAA)) {
+			combo_stop(CircularAA);
 		}
 
-		if (get_val(PS4_R2) && !get_val(PS4_L2)) {
+		if (get_val(PS4_R2) && !get_val(PS4_L2) && current_weapon == 0) {
 			combo_run(HipfireStrafe);
 		}
 	}
@@ -109,25 +120,46 @@ main {
 	}
 
 	// ------------------------------------------------------------------------
-	// 8. Auto-Strafe (L2 + R2)
+	// 8. Auto-Strafe mit "Smart Yield" (NUR FÜR MP/SMG)
 	// ------------------------------------------------------------------------
-	if (get_val(PS4_L2) && get_val(PS4_R2)) {
-		combo_run(AutoStrafe);
+	if (get_val(PS4_L2) && get_val(PS4_R2) && current_weapon == 0) {
+		if (abs(get_val(PS4_LX)) < 60) {
+			combo_run(AutoStrafe);
+		}
+		else if (combo_running(AutoStrafe)) {
+			combo_stop(AutoStrafe);
+		}
 	}
 	else if (combo_running(AutoStrafe)) {
-		// GPC-konforme Abfrage: Stoppt die Combo sofort sauber
 		combo_stop(AutoStrafe);
 	}
 }
 
 // ============================================================================
-// 🧠 FUNKTIONEN
+// 🧠 FUNKTIONEN (LED & OLED FEEDBACK)
 // ============================================================================
 function update_feedback() {
-	set_led(LED_1, current_weapon == 0);
-	set_led(LED_2, current_weapon == 1);
-	set_led(LED_3, 0);
-	set_led(LED_4, 0);
+	cls_oled(0);
+
+	if (current_weapon == 0) {
+		// Profil 0: MP (Blau)
+		set_led(LED_1, 1);
+		set_led(LED_2, 0);
+		set_led(LED_3, 0);
+		set_led(LED_4, 0);
+		// Wir nutzen print() und rufen das erste Zeichen [0] der String-Konstante ab
+		print(25, 25, 0, 1, msg_mp1[0]);
+		print(25, 40, 0, 1, msg_mp2[0]);
+	}
+	else {
+		// Profil 1: AR (Rot)
+		set_led(LED_1, 0);
+		set_led(LED_2, 1);
+		set_led(LED_3, 0);
+		set_led(LED_4, 0);
+		print(25, 25, 0, 1, msg_ar1[0]);
+		print(25, 40, 0, 1, msg_ar2[0]);
+	}
 }
 
 // ============================================================================
@@ -173,14 +205,18 @@ combo HipfireStrafe {
 	wait(40);
 }
 
-combo RotationalAA {
-	set_val(PS4_RX, get_val(PS4_RX) + 18);
+combo CircularAA {
+	set_val(PS4_RY, get_val(PS4_RY) - 15);
+	set_val(PS4_RX, get_val(PS4_RX) + 15);
 	wait(15);
-	set_val(PS4_RY, get_val(PS4_RY) + 18);
+	set_val(PS4_RY, get_val(PS4_RY) + 15);
+	set_val(PS4_RX, get_val(PS4_RX) + 15);
 	wait(15);
-	set_val(PS4_RX, get_val(PS4_RX) - 18);
+	set_val(PS4_RY, get_val(PS4_RY) + 15);
+	set_val(PS4_RX, get_val(PS4_RX) - 15);
 	wait(15);
-	set_val(PS4_RY, get_val(PS4_RY) - 18);
+	set_val(PS4_RY, get_val(PS4_RY) - 15);
+	set_val(PS4_RX, get_val(PS4_RX) - 15);
 	wait(15);
 }
 
