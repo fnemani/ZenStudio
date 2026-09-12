@@ -1,351 +1,277 @@
-/* ========================================================================
-   Warzone GPC Script - V4.3 (PERFORMANCE & QOL OPTIMIZED)
-   Layout: Stick & Bewegung (R3 = Jump)
-======================================================================== */
-const string BOOT_MSG1 = "V4.3 OPTIMIZED";
-const string BOOT_MSG2 = "BY FAWI";
-const string MSG_WEAPON_MP = "WAFFE: MP";
-const string MSG_WEAPON_AR = "WAFFE: AR";
-const string MSG_RF_ON = "RAPID: ON";
-const string MSG_RF_OFF = "RAPID: OFF";
+// ============================================================================
+// 🎮 WARZONE GPC PRO | REBIRTH QUADS EDITION V4
+// 🕹️ Layout: Stick & Bewegung -> R3 = Jump, Kreis = Crouch/Slide
+// ⚙️ Features: Y-Y Spam, Smart Plating, Directional L2-Release Jump
+// ============================================================================
+int current_weapon = 0; // 0 = MP (SMG), 1 = AR (Sturmgewehr)
+int recoil_MP = 20;
+int recoil_AR = 25;
+int aim_assist = 1;
+int active_recoil;
+int final_recoil;
+int plating_active = 0;
+int jump_toggle = 100; // NEU: Steuert die Links/Rechts Sprungrichtung
 
-// --- Button Mappings – PS5 ---
-define ADS = XB1_LT;
-define FIRE = XB1_RT;
-define SPRINT = XB1_LS;
-define RX = XB1_RX;
-define RY = XB1_RY;
-define LX = XB1_LX;
-define LY = XB1_LY;
-define CROUCH = XB1_B;
-define JUMP = XB1_RS; // R3 für Stick & Bewegung
-define MELEE = XB1_A;
-define RELOAD = XB1_X;
-define SWAP_BTN = XB1_Y;
-define PING = XB1_UP;
-define DPAD_LEFT = XB1_LEFT; // Für manuellen Rapid-Fire Toggle
+define AA_POWER = 8;
+define AA_DELAY = 12;
 
-// --- Konstanten & Toggles ---
-define STICK_MAX = 100;
-define STICK_MIN = -100;
-define TRIGGER_DZ = 5;
-
-int AutoBreath_Toggle = TRUE;
-int Strafe_Toggle = TRUE;
-int AutoRun_Toggle = TRUE;
-int Slide_Toggle = TRUE;
-int RapidFire_Toggle = TRUE;
-int AutoPing_Toggle = TRUE;
-
-// --- WAFFEN PROFILE (Rapid Fire) ---
-int is_secondary = FALSE;
-
-// Settings für die MP (Primärwaffe)
-int MP_RF_Hold = 30;
-int MP_RF_Release = 30;
-
-// Settings für das Sturmgewehr / AR (Sekundärwaffe)
-int AR_RF_Hold = 40;
-int AR_RF_Release = 40;
-
-// Aktuell genutzte Settings
-int Active_RF_Hold = 30;
-int Active_RF_Release = 30;
-
-// --- Aim Assist Settings (MAXIMUM AGGRESSIVE) ---
-int AA_Release = 85;
-int AA_Size = 22;
-int AA_Diag = 15; // CPU OPTIMIERUNG: Vorberechneter Wert (22 * 7 / 10)
-int AA_Speed = 10;
-int Strafe_AA_Size = 20;
-int Strafe_AA_Speed = 10;
-
-// --- Internal Timers & States ---
-int ads_on;
-int fire_on;
-int ly_in;
-int lx_in;
-int rx_in;
-int ry_in;
-int rx_abs;
-int ry_abs;
-int was_ads_and_fire = FALSE;
-int jump_direction = 100;
-int final_rx;
-int final_ry;
-
-int aa_timer = 0;
-int aa_step = 0;
-int ping_ready = TRUE;
-
-function clamp_stick(val) {
-	if (val > STICK_MAX) {
-		return STICK_MAX;
-	}
-
-	if (val < STICK_MIN) {
-		return STICK_MIN;
-	}
-
-	return val;
-}
+// ----------------------------------------------------------------------------
+// OLED Strings
+// ----------------------------------------------------------------------------
+const string msg_mp1 = " PROFIL: MP ";
+const string msg_mp2 = " (SMG + Jump) ";
+const string msg_ar1 = " PROFIL: AR ";
+const string msg_ar2 = " (Long Range) ";
 
 init {
-	cls_oled(0);
-	print(15, 5, 0, 1, BOOT_MSG1[0]);
-	print(36, 25, 0, 1, BOOT_MSG2[0]);
-	print(30, 45, 0, 1, MSG_WEAPON_MP[0]);
+	update_feedback();
 }
 
 main {
-	// =========================================================
-	// --- 1. ZENTRALES CACHING ---
-	// =========================================================
-	ads_on = (get_val(ADS) > TRIGGER_DZ);
-	fire_on = (get_val(FIRE) > TRIGGER_DZ);
-	ly_in = get_val(LY);
-	lx_in = get_val(LX);
-	rx_in = get_val(RX);
-	ry_in = get_val(RY);
-	rx_abs = abs(rx_in);
-	ry_abs = abs(ry_in);
+	// ------------------------------------------------------------------------
+	// 1. Instant Hair Triggers
+	// ------------------------------------------------------------------------
+	if (get_val(PS4_L2) > 0) {
+		set_val(PS4_L2, 100);
+	}
 
-	// =========================================================
-	// --- IN-GAME TOGGLES & SMART WEAPON TRACKING ---
-	// =========================================================
-	// 1. Manueller Rapid-Fire Toggle (L2 + D-Pad Links)
-	if (ads_on && event_press(DPAD_LEFT)) {
-		RapidFire_Toggle = !RapidFire_Toggle;
-		cls_oled(0);
+	if (get_val(PS4_R2) > 0) {
+		set_val(PS4_R2, 100);
+	}
 
-		if (RapidFire_Toggle) {
-			print(25, 25, 0, 1, MSG_RF_ON[0]);
+	// ------------------------------------------------------------------------
+	// 2. Y-Y Spam (Movement Flow)
+	// ------------------------------------------------------------------------
+	if (get_val(PS4_RIGHT)) {
+		combo_run(YY_Spam);
+	}
+
+	// ------------------------------------------------------------------------
+	// 3. Smart Weapon Tracking (Anti-Desync Fix)
+	// ------------------------------------------------------------------------
+	if (event_release(PS4_TRIANGLE) && get_ptime(PS4_TRIANGLE) < 300 && !combo_running(YY_Spam)) {
+		if (get_val(PS4_L2)) {
+			current_weapon = 0;
 		}
 		else {
-			print(20, 25, 0, 1, MSG_RF_OFF[0]);
+			current_weapon = !current_weapon;
 		}
+
+		update_feedback();
 	}
 
-	// 2. Automatischer Profilwechsel (Dreieck / Y tippen)
-	if (event_press(SWAP_BTN) && !ads_on) {
-		is_secondary = !is_secondary;
-		cls_oled(0);
-		print(15, 5, 0, 1, BOOT_MSG1[0]);
+	// ------------------------------------------------------------------------
+	// 4. Dynamic Anti-Recoil
+	// ------------------------------------------------------------------------
+	if (get_val(PS4_L2) && get_val(PS4_R2)) {
+		active_recoil = (current_weapon == 0) ? recoil_MP : recoil_AR;
 
-		if (is_secondary) {
-			Active_RF_Hold = AR_RF_Hold;
-			Active_RF_Release = AR_RF_Release;
-			print(30, 25, 0, 1, MSG_WEAPON_AR[0]);
-		}
-		else {
-			Active_RF_Hold = MP_RF_Hold;
-			Active_RF_Release = MP_RF_Release;
-			print(30, 25, 0, 1, MSG_WEAPON_MP[0]);
-		}
-	}
+		if (abs(get_val(PS4_RY)) < active_recoil + 15) {
+			final_recoil = get_val(PS4_RY) + active_recoil;
 
-	// 3. Manueller Reset auf MP (L2 + Dreieck / Y)
-	if (ads_on && event_press(SWAP_BTN)) {
-		is_secondary = FALSE;
-		Active_RF_Hold = MP_RF_Hold;
-		Active_RF_Release = MP_RF_Release;
-		set_val(SWAP_BTN, 0); // Verhindert echten Waffenwechsel im Spiel
-		cls_oled(0);
-		print(15, 5, 0, 1, BOOT_MSG1[0]);
-		print(30, 25, 0, 1, MSG_WEAPON_MP[0]);
-	}
-
-	// =========================================================
-	// --- AGGRESSIVE MOVEMENT ---
-	// =========================================================
-	if (AutoRun_Toggle && ly_in < -50 && !ads_on && !fire_on && !get_val(RELOAD) && !combo_running(Fast_Slide_Cancel)) {
-		set_val(SPRINT, STICK_MAX);
-	}
-
-	if (event_press(CROUCH) && ly_in < -50 && Slide_Toggle) {
-		combo_run(Fast_Slide_Cancel);
-	}
-
-	if (get_val(JUMP) && !combo_running(Fast_Slide_Cancel)) {
-		combo_run(B_Hop_Combo);
-	}
-	else if (!combo_running(Fast_Slide_Cancel)) {
-		combo_stop(B_Hop_Combo);
-	}
-
-	if (ads_on && fire_on) {
-		was_ads_and_fire = TRUE;
-	}
-	else if (!ads_on && fire_on && was_ads_and_fire) {
-		was_ads_and_fire = FALSE;
-		jump_direction = (jump_direction == 100) ? -100 : 100;
-		combo_run(Auto_Strafe_Jump);
-	}
-	else if (!fire_on) {
-		was_ads_and_fire = FALSE;
-	}
-
-	// =========================================================
-	// --- AUTO-PING (ZUVERLÄSSIGER DANGER PING) ---
-	// =========================================================
-	if (AutoPing_Toggle) {
-		if (ads_on && fire_on) {
-			if (ping_ready) {
-				combo_run(Auto_Ping_Combo);
-				ping_ready = FALSE;
+			if (final_recoil > 100) {
+				final_recoil = 100;
 			}
-		}
-		else if (!fire_on) {
-			ping_ready = TRUE;
+			else if (final_recoil < -100) {
+				final_recoil = -100;
+			}
+
+			set_val(PS4_RY, final_recoil);
 		}
 	}
 
-	// =========================================================
-	// --- TRIGGER & DYNAMIC RAPID FIRE ---
-	// =========================================================
-	if (ads_on) {
-		set_val(ADS, STICK_MAX);
+	// ------------------------------------------------------------------------
+	// 5. Auto-Ping beim ersten Schuss
+	// ------------------------------------------------------------------------
+	if (get_val(PS4_L2) && event_press(PS4_R2)) {
+		combo_run(AutoPing);
 	}
 
-	if (fire_on) {
-		if (RapidFire_Toggle) {
-			combo_run(Rapid_Fire_Combo);
+	// ------------------------------------------------------------------------
+	// 6. Micro-Dynamic Aim Assist
+	// ------------------------------------------------------------------------
+	if (aim_assist && get_val(PS4_L2)) {
+		if (abs(get_val(PS4_RX)) < 25 && abs(get_val(PS4_RY)) < 25) {
+			combo_run(MicroStickyAA);
+		}
+		else if (combo_running(MicroStickyAA)) {
+			combo_stop(MicroStickyAA);
+		}
+	}
+	else if (combo_running(MicroStickyAA)) {
+		combo_stop(MicroStickyAA);
+	}
+
+	// ------------------------------------------------------------------------
+	// 7. Aggressive Movement (Slide Cancel & Drop/Jump Shots)
+	// ------------------------------------------------------------------------
+	if (event_press(PS4_CIRCLE) && get_val(PS4_LY) < -60) {
+		combo_run(ModernSlideCancel);
+	}
+
+	if (get_val(PS4_R2) && event_press(PS4_CIRCLE)) {
+		combo_run(DropShot);
+	}
+
+	if (current_weapon == 0 && get_val(PS4_L2) && event_press(PS4_R2)) {
+		combo_run(SMGJumpShot);
+	}
+
+	// ------------------------------------------------------------------------
+	// 8. NEU: Directional L2-Release Jump (Links/Rechts Ausweichen)
+	// ------------------------------------------------------------------------
+	if (get_val(PS4_R2) && event_release(PS4_L2)) {
+		// Prüfen der aktuellen Stick-Richtung
+		if (get_val(PS4_LX) < -30) {
+			jump_toggle = -100; // Spieler lenkt nach links -> Springe links
+		}
+		else if (get_val(PS4_LX) > 30) {
+			jump_toggle = 100; // Spieler lenkt nach rechts -> Springe rechts
 		}
 		else {
-			set_val(FIRE, STICK_MAX);
-		}
-	}
-	else {
-		combo_stop(Rapid_Fire_Combo);
-	}
-
-	// =========================================================
-	// --- PURE AIM ASSIST (CPU-OPTIMIZED 8-POINT CIRCLE) ---
-	// =========================================================
-	final_rx = rx_in;
-	final_ry = ry_in;
-
-	if (ads_on) {
-		if (rx_abs < AA_Release && ry_abs < AA_Release) {
-			aa_timer = aa_timer + get_rtime();
-
-			if (aa_timer >= AA_Speed) {
-				aa_timer = 0;
-				aa_step = (aa_step + 1) & 7; // 8-Punkt Zirkel (0 bis 7)
-			}
-
-			// Kreis-Approximation mit vorberechneten Diagonale-Werten (AA_Diag)
-			if (aa_step == 0) {
-				final_ry = final_ry + AA_Size;
-			}
-			else if (aa_step == 1) {
-				final_rx = final_rx + AA_Diag;
-				final_ry = final_ry + AA_Diag;
-			}
-			else if (aa_step == 2) {
-				final_rx = final_rx + AA_Size;
-			}
-			else if (aa_step == 3) {
-				final_rx = final_rx + AA_Diag;
-				final_ry = final_ry - AA_Diag;
-			}
-			else if (aa_step == 4) {
-				final_ry = final_ry - AA_Size;
-			}
-			else if (aa_step == 5) {
-				final_rx = final_rx - AA_Diag;
-				final_ry = final_ry - AA_Diag;
-			}
-			else if (aa_step == 6) {
-				final_rx = final_rx - AA_Size;
-			}
-			else if (aa_step == 7) {
-				final_rx = final_rx - AA_Diag;
-				final_ry = final_ry + AA_Diag;
-			}
+			// Spieler steht still -> wechsle Richtung automatisch ab (Zick-Zack)
+			jump_toggle = jump_toggle * -1;
 		}
 
-		set_val(RX, clamp_stick(final_rx));
-		set_val(RY, clamp_stick(final_ry));
+		combo_run(DirectionalQuickJump);
 	}
 
-	// =========================================================
-	// --- STRAFE AA & AUTOBREATH ---
-	// =========================================================
-	if (Strafe_Toggle && (ads_on || fire_on) && abs(ly_in) < 40 && abs(lx_in) < 40) {
-		combo_run(Strafe_AA);
-	}
-	else {
-		combo_stop(Strafe_AA);
+	// ------------------------------------------------------------------------
+	// 9. Auto-Plating Evasion (Ausweichen beim Heilen)
+	// ------------------------------------------------------------------------
+	if (get_val(PS4_TRIANGLE) && get_ptime(PS4_TRIANGLE) > 300) {
+		plating_active = 1;
 	}
 
-	if (AutoBreath_Toggle && ads_on && !fire_on) {
-		combo_run(AutoBreath_Combo);
+	if (plating_active) {
+		combo_run(EvasivePlating);
 	}
-	else {
-		combo_stop(AutoBreath_Combo);
+
+	if (get_val(PS4_L2) || get_val(PS4_R2)) {
+		plating_active = 0;
+		combo_stop(EvasivePlating);
 	}
 }
 
-// =========================================================
-// --- COMBOS ---
-// =========================================================
-combo Fast_Slide_Cancel {
-	set_val(CROUCH, STICK_MAX);
-	wait(80);
-	set_val(CROUCH, 0);
+// ============================================================================
+// 🧠 FUNKTIONEN (LED & OLED FEEDBACK)
+// ============================================================================
+function update_feedback() {
+	cls_oled(0);
+
+	if (current_weapon == 0) {
+		set_led(LED_1, 1);
+		set_led(LED_2, 0);
+		set_led(LED_3, 0);
+		set_led(LED_4, 0);
+		print(25, 20, 0, 1, msg_mp1[0]);
+		print(15, 38, 0, 1, msg_mp2[0]);
+	}
+	else {
+		set_led(LED_1, 0);
+		set_led(LED_2, 1);
+		set_led(LED_3, 0);
+		set_led(LED_4, 0);
+		print(25, 20, 0, 1, msg_ar1[0]);
+		print(15, 38, 0, 1, msg_ar2[0]);
+	}
+}
+
+// ============================================================================
+// ⚡ COMBOS
+// ============================================================================
+combo AutoPing {
+	set_val(PS4_UP, 100);
+	wait(20);
+	set_val(PS4_UP, 0);
+	wait(20);
+}
+
+combo ModernSlideCancel {
+	set_val(PS4_CIRCLE, 100);
+	wait(90);
+	set_val(PS4_CIRCLE, 0);
+	wait(25);
+	set_val(PS4_R3, 100);
+	wait(70);
+	set_val(PS4_R3, 0);
+	wait(35);
+	set_val(PS4_R3, 100);
+	wait(70);
+	set_val(PS4_R3, 0);
+	wait(35);
+	set_val(PS4_R3, 100);
+	wait(70);
+	set_val(PS4_R3, 0);
+	wait(35);
+	set_val(PS4_R3, 100);
+	wait(70);
+	set_val(PS4_R3, 0);
+}
+
+combo DropShot {
+	set_val(PS4_CIRCLE, 100);
+	wait(350);
+}
+
+combo SMGJumpShot {
 	wait(40);
-	set_val(JUMP, STICK_MAX);
-	wait(40);
-	set_val(JUMP, 0);
+	set_val(PS4_R3, 100);
+	wait(70);
+	set_val(PS4_R3, 0);
+}
+
+// NEU: Seitwärtssprung (Links/Rechts)
+combo DirectionalQuickJump {
+	set_val(PS4_LX, jump_toggle); // Drückt den linken Stick hart in die berechnete Richtung
+	set_val(PS4_R3, 100);
+	wait(100); // 100ms reicht für einen sauberen, weiten Sprung
+	set_val(PS4_LX, jump_toggle);
+	set_val(PS4_R3, 0);
+}
+
+combo MicroStickyAA {
+	set_val(PS4_RY, get_val(PS4_RY) + AA_POWER);
+	wait(AA_DELAY);
+	set_val(PS4_RX, get_val(PS4_RX) + AA_POWER);
+	wait(AA_DELAY);
+	set_val(PS4_RY, get_val(PS4_RY) - AA_POWER);
+	wait(AA_DELAY);
+	set_val(PS4_RX, get_val(PS4_RX) - AA_POWER);
+	wait(AA_DELAY);
+}
+
+combo YY_Spam {
+	set_val(PS4_TRIANGLE, 100);
+	wait(25);
+	set_val(PS4_TRIANGLE, 0);
+	wait(25);
+	set_val(PS4_TRIANGLE, 100);
+	wait(25);
+	set_val(PS4_TRIANGLE, 0);
+	wait(25);
+}
+
+combo EvasivePlating {
+	set_val(PS4_R3, 100);
 	wait(50);
-	set_val(JUMP, STICK_MAX);
-	wait(40);
-	set_val(JUMP, 0);
-}
-
-combo B_Hop_Combo {
-	set_val(JUMP, STICK_MAX);
-	wait(40);
-	set_val(JUMP, 0);
-	wait(60);
-}
-
-combo Auto_Ping_Combo {
-	set_val(PING, STICK_MAX);
-	wait(60);
-	set_val(PING, 0);
-	wait(80);
-	set_val(PING, STICK_MAX);
-	wait(60);
-	set_val(PING, 0);
-}
-
-combo Auto_Strafe_Jump {
-	set_val(LX, jump_direction);
-	set_val(JUMP, STICK_MAX);
-	wait(120);
-	set_val(LX, jump_direction);
-	set_val(JUMP, 0);
-	wait(150);
-}
-
-combo Rapid_Fire_Combo {
-	set_val(FIRE, STICK_MAX);
-	wait(Active_RF_Hold);
-	set_val(FIRE, 0);
-	wait(Active_RF_Release);
-}
-
-combo Strafe_AA {
-	set_val(LX, clamp_stick(lx_in + Strafe_AA_Size));
-	wait(Strafe_AA_Speed);
-	set_val(LX, clamp_stick(lx_in - Strafe_AA_Size));
-	wait(Strafe_AA_Speed);
-}
-
-combo AutoBreath_Combo {
-	wait(150);
-	set_val(SPRINT, STICK_MAX);
-	wait(4000);
+	set_val(PS4_R3, 0);
+	wait(550);
+	set_val(PS4_CIRCLE, 100);
+	wait(50);
+	set_val(PS4_CIRCLE, 0);
+	wait(550);
+	set_val(PS4_R3, 100);
+	wait(50);
+	set_val(PS4_R3, 0);
+	wait(550);
+	set_val(PS4_CIRCLE, 100);
+	wait(50);
+	set_val(PS4_CIRCLE, 0);
+	wait(550);
+	set_val(PS4_R3, 100);
+	wait(50);
+	set_val(PS4_R3, 0);
+	wait(550);
+	plating_active = 0;
 }
