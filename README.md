@@ -1,64 +1,105 @@
-# 🎮 Warzone GPC Script PRO | PS5 Edition
+# 🎮 WARZONE GPC PRO V10 – Rebirth Quads Edition
 
-Dieses GPC-Skript ist speziell für **Call of Duty: Warzone auf der PlayStation 5 (DualSense-Controller)** optimiert. Es bietet fortschrittliche Movement-Mechaniken, dynamisches Anti-Recoil-Tracking über das Adapter-Display (Cronus Zen/Titan) und maximierten Aim Assist.
+Ein hochoptimiertes Cronus Zen GPC-Script für Call of Duty: Warzone (Rebirth Island Quads). 
+Fokus auf **Geschwindigkeit**, **Präzision** und **Bewegungsfluss** – ohne Ballast.
 
----
-
-## ⚠️ Wichtige In-Game-Einstellungen
-
-Damit das Skript fehlerfrei funktioniert, **müssen** folgende Einstellungen in Warzone vorgenommen werden:
-
-*   **Tastenbelegung:** `Stick & Bewegung` (Stick & Move)
-*   **Automatischer Sprint:** `Automatischer Taktiksprint` *(Zwingend erforderlich für das Auto-Run-Skript und flüssige Slide-Cancels!)*
+![Version](https://img.shields.io/badge/version-10.0-blue)
+![Platform](https://img.shields.io/badge/platform-Cronus%20Zen-green)
+![Game](https://img.shields.io/badge/game-Warzone-orange)
 
 ---
 
-## 🕹️ Controller Layout (PS5 DualSense)
+## 📋 Inhaltsverzeichnis
 
-Das Skript greift nativ in die "Stick & Bewegung"-Belegung ein und optimiert die Trigger-Reaktionszeiten:
-
-| Taste | Aktion | Skript-Optimierung |
-| :--- | :--- | :--- |
-| **L2 / R2** | Zielen / Schießen | **Hair-Triggers** – reagieren sofort bei minimaler Berührung. |
-| **L3** | Sprint / Movement | Taktiksprint triggert extrem früh (bereits bei 50% Stick-Ausschlag). |
-| **R3** | Springen | Standard "Stick & Move"-Verhalten (Rechter Stick Klick). |
-| **Kreis (O)** | Haltung | Steuert das erweiterte Slide-Cancel-System. |
-| **Dreieck (Δ)**| Waffenwechsel | Steuert In-Game-Waffe **und** synchronisiert das Skript-Profil. |
+- [Features](#-features)
+- [Installation](#-installation)
+- [Steuerung](#-steuerung)
+- [Konfiguration](#-konfiguration)
+- [Tuning-Tipps](#-tuning-tipps)
+- [Voraussetzungen](#-voraussetzungen)
+- [Hinweise](#-hinweise)
 
 ---
 
-## ⚡ Aggressive Movement Systems
+## ⚡ Features
 
-Das Movement-Profil wurde komplett überarbeitet, um die Hitbox in Close-Quarter-Gunfights unberechenbar zu machen:
+### 🎯 Aim Assist
+- **Smooth Rotational Aim Assist** – kreisförmige Mikro-Bewegung des rechten Sticks
+- **Left Stick Micro-Movement** – triggert In-Game Rotational AA
+- **Automatische Pause** bei manuellem Zielen (`RX/RY > 30`)
+- **Waffenspezifische Stärke** – MP (stark) vs AR (schwächer, weniger Jitter)
+- **Live-Anpassung** via `L2 + R3` / `L2 + L1`
+- **Visueller AA-Balken** auf dem OLED-Display
 
-*   **Aggressive Slide-Cancel (Slide into 3x B-Hop):** 
-    Wird im Taktiksprint die `Kreis`-Taste gedrückt, führt der Charakter einen schnellen Slide aus, bricht diesen serverseitig perfekt ab und hängt **automatisch 3 Bunny-Hops** an.
-*   **Auto Strafe Jump (Camera Breaker):** 
-    Befindest du dich im Gunfight (L2 + R2 gedrückt) und lässt die Ziel-Taste (`L2`) kurz los (Wechsel ins Bunny-Hops), führt das Skript automatisch einen unvorhersehbaren Strafe-Jump aus.
+### 🔫 Anti-Recoil
+- **Zeitbasierte Kurve** – Kompensation steigt progressiv mit der Feuerdauer
+- **Pro-Waffe konfigurierbar** – getrennte Werte für MP und AR
+- **Max-Cap** verhindert Überkompensation
+- **Smart-Pause** – deaktiviert sich, wenn du selbst stark zielst (`RX/RY > 40`)
+- **Sofortiger Reset** nach dem Feuern
+
+### 🏃 Movement & Combos
+- **YY-Spam** – blitzschnelles Waffenwechseln (60ms Zyklus) für Movement-Flow
+- **Slide + 3 Jump Chain** – Kreis beim Sprinten → Slide + 3 automatische Jumps
+- **Directional L2-Release Jump** – Springt in Stick-Richtung beim Loslassen von L2
+- **Kein versehentlicher Jump** mehr beim Feuern
+
+### 🖥️ OLED & LED Feedback
+- **Profil-Anzeige** – MP / AR wird live angezeigt
+- **LED-1** = MP-Profil aktiv
+- **LED-2** = AR-Profil aktiv
+- **AA-Stärke-Balken** – visuell als Punkte dargestellt
+- **Versions-Info** auf dem Display
+
+### 🎛️ Weitere Features
+- **Instant Hair Triggers** mit Deadzone (verhindert Ghost-Inputs)
+- **Auto-Ping** beim ersten Schuss (markiert Gegner für das Team)
+- **Smart Weapon Tracking** – Waffenwechsel durch kurzes Dreieck-Drücken
+- **Manueller Profil-Reset** – Touchpad + Dreieck
+- **Crouch on ADS** (optional, Code-Level)
+
+### 🚫 Bewusst NICHT enthalten
+- ❌ Drop-Shot (kein Hinlegen)
+- ❌ Auto-Plating Evasion
+- ❌ Auto-Rotate Loot
+- ❌ Feature-Toggles (alles läuft dauerhaft)
 
 ---
 
-## 🎯 Aiming & Combat Utility
+## 🎮 Steuerung
 
-Der Aim Assist-Code wurde entschlackt und auf konstante, maximale Performance getrimmt:
+### Gameplay-Inputs
 
-*   **Always-On Aim Assist:** Der Rotational & Strafe Aim Assist ist beim Zielen permanent am Limit aktiv. Ein manuelles Ein- und Ausschalten ist jederzeit möglich (der aktuelle Status ist auf dem Display des Cronus Zen ersichtlich).
-*   **Dynamic Anti-Recoil:** Maßgeschneidert für ein Loadout mit **Maschinenpistole (Primary)** und **Sturmgewehr (Secondary)**.
-*   **Auto-Ping:** Markiert den Gegner automatisch, sobald der erste Schuss aus der Zielvorrichtung (ADS) abgefeuert wird.
-*   **Auto-Breath:** Simuliert automatisches Luftanhalten (`L3`) beim Zielen – ideal für Sniper-Loadouts.
+| Eingabe | Wirkung |
+|---------|---------|
+| **KREIS beim Sprinten** | 🔥 Slide + 3 automatische Jumps |
+| **RECHTS halten** | YY-Spam (Waffenwechsel-Flow) |
+| **TRIANGLE kurz (<300ms)** | Waffenprofil wechseln (MP ↔ AR) |
+| **TOUCHPAD + DREIECK** | Profil manuell auf MP zurücksetzen |
+| **L2 + R2 halten** | Zielen + Feuern (Anti-Recoil aktiv) |
+| **L2 loslassen während R2** | Directional Jump (Richtung per Stick) |
+| **L2 + R3** | Aim-Assist-Stärke +2 |
+| **L2 + L1** | Aim-Assist-Stärke −2 |
+
+### Jump-Richtung (L2-Release)
+
+| Stick-Position beim Loslassen | Jump-Richtung |
+|-------------------------------|---------------|
+| Stick nach links (< −30) | ⬅️ Jump nach links |
+| Stick nach rechts (> 30) | ➡️ Jump nach rechts |
+| Stick neutral | 🔄 Abwechselnd links/rechts |
 
 ---
 
-## 📟 Smart Weapon Tracking & OLED Display
+## ⚙️ Konfiguration
 
-Das Skript verwaltet zwei völlig separate Anti-Recoil-Profile (MP und AR). Auf störende Controller-Vibrationen als Feedback wurde bewusst verzichtet. Stattdessen wird das Hardware-OLED-Display des Adapters (Cronus Zen / Titan) genutzt.
+Alle Werte können am Anfang des Skripts angepasst werden:
 
-### 🔄 Profil-Wechsel
-Beim Drücken von `Dreieck` ändert das Skript im Hintergrund den Rückstoßwert und liefert Echtzeit-Feedback auf dem Display:
-*   **Primary:** Anzeige `WAFFE: MP` (Recoil-Wert: 20)
-*   **Secondary:** Anzeige `WAFFE: AR` (Recoil-Wert: 25)
+### Anti-Recoil
 
-### 🛠️ Manueller Resync (Desync Fix)
-Falls das Skript durch In-Game-Ereignisse (Tod, Gulag, Plattenkauf, Aufheben einer Bodenwaffe) asynchron zur tatsächlichen Waffe wird:
-*   **Aktion:** Halte `L2` (Zielen) + drücke `Dreieck`.
-*   **Ergebnis:** Das Skript wird *lautlos* wieder auf das MP-Profil (Primary) zurückgesetzt, **ohne** dass die Waffe im Spiel gewechselt wird. Das Display bestätigt dies durch den Sprung auf `WAFFE: MP`.
+```gpc
+int recoil_MP         = 15;    // Startwert MP
+int recoil_AR         = 20;    // Startwert AR
+int max_recoil_MP     = 30;    // Maximale Kompensation MP
+int max_recoil_AR     = 40;    // Maximale Kompensation AR
+int recoil_curve_rate = 8;     // Anstieg pro 100ms Feuerzeit
